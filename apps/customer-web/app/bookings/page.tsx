@@ -11,7 +11,7 @@ import { formatMyr } from '@/lib/pricing';
 import { useMarket } from '@/lib/live';
 import { useStore } from '@/lib/store';
 
-const TABS = { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' } as const;
+const TABS = { upcoming: 'Upcoming', past: 'Completed', cancelled: 'Cancelled' } as const;
 type Tab = keyof typeof TABS;
 
 export default function BookingsPage() {

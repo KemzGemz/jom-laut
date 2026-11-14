@@ -6,7 +6,7 @@ import { stageOf } from '@/lib/bookings';
 import { useOperator } from '@/lib/live';
 import { BookingRow } from '../parts';
 
-const TABS = { pending: 'Requests', confirmed: 'Upcoming', completed: 'Past', cancelled: 'Cancelled' } as const;
+const TABS = { pending: 'Requests', confirmed: 'Upcoming', completed: 'Completed', cancelled: 'Cancelled' } as const;
 type Tab = keyof typeof TABS;
 
 export default function OperatorBookings() {
