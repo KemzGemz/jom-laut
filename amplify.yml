@@ -11,7 +11,8 @@ applications:
             - nvm use 22
             - npm install -g pnpm@11.17.0
             # Amplify needs a flat node_modules to package the Next.js server.
-            - pnpm install --frozen-lockfile --config.node-linker=hoisted --filter @jom-laut/customer-web...
+            # The web app needs none of the API's install scripts (Prisma, NestJS), so skipping them must not fail the build.
+            - pnpm install --frozen-lockfile --config.node-linker=hoisted --config.strict-dep-builds=false --filter @jom-laut/customer-web...
         build:
           commands:
             - pnpm --filter @jom-laut/customer-web build
