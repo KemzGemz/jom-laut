@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { getTrip } from '@/lib/repo';
 import { Checkout } from './Checkout';
@@ -13,11 +12,9 @@ export function generateMetadata({ params }: Props): Metadata {
 }
 
 export default function BookPage({ params }: Props) {
-  const trip = getTrip(params.id);
-  if (!trip) notFound();
   return (
     <Suspense fallback={<div className="container page muted">Loading…</div>}>
-      <Checkout trip={trip} />
+      <Checkout id={params.id} base={getTrip(params.id)} />
     </Suspense>
   );
 }

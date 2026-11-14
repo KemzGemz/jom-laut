@@ -6,12 +6,15 @@
  * shape mirrors what the auth and bookings APIs will return.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { Booking, User } from './types';
+import type { ISODate } from './dates';
+import { EMPTY_MARKET, type MarketState } from './market';
+import type { Booking, Trip, User } from './types';
 
-interface Persisted {
+interface Persisted extends MarketState {
   user: User | null;
   wishlist: string[];
-  bookings: Booking[];
+  /** The operator account this browser is using, if any. */
+  operatorId: string | null;
 }
 
 interface Store extends Persisted {
@@ -22,11 +25,15 @@ interface Store extends Persisted {
   updateProfile: (patch: Partial<User>) => void;
   toggleWishlist: (tripId: string) => void;
   addBooking: (booking: Booking) => void;
+  /** Also accepts the reference of a sample booking, whose changes are kept as an override. */
   updateBooking: (ref: string, patch: Partial<Booking>) => void;
+  setOperator: (id: string | null) => void;
+  setBlocked: (tripIds: string[], date: ISODate, blocked: boolean) => void;
+  saveListing: (trip: Trip) => void;
 }
 
 const KEY = 'anglex.session.v1';
-const EMPTY: Persisted = { user: null, wishlist: [], bookings: [] };
+const EMPTY: Persisted = { ...EMPTY_MARKET, user: null, wishlist: [], operatorId: null };
 const StoreContext = createContext<Store | undefined>(undefined);
 
 function titleCase(s: string): string {
@@ -74,7 +81,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })),
       addBooking: (booking) => commit((s) => ({ ...s, bookings: [booking, ...s.bookings] })),
       updateBooking: (ref, patch) =>
-        commit((s) => ({ ...s, bookings: s.bookings.map((b) => (b.ref === ref ? { ...b, ...patch } : b)) })),
+        commit((s) =>
+          s.bookings.some((b) => b.ref === ref)
+            ? { ...s, bookings: s.bookings.map((b) => (b.ref === ref ? { ...b, ...patch } : b)) }
+            : { ...s, overrides: { ...s.overrides, [ref]: { ...s.overrides[ref], ...patch } } },
+        ),
+      setOperator: (operatorId) => commit((s) => ({ ...s, operatorId })),
+      setBlocked: (tripIds, date, blocked) =>
+        commit((s) => {
+          const next = { ...s.blocked };
+          for (const id of tripIds) {
+            const others = (next[id] ?? []).filter((d) => d !== date);
+            next[id] = blocked ? [...others, date] : others;
+          }
+          return { ...s, blocked: next };
+        }),
+      saveListing: (trip) => commit((s) => ({ ...s, listings: { ...s.listings, [trip.id]: trip } })),
     }),
     [state, ready, commit],
   );

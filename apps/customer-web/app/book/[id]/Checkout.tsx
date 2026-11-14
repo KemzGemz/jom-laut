@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { TripPhoto, tripHref } from '@/components/TripCard';
+import { Rating, TripNotFound, TripPhoto, tripHref } from '@/components/TripCard';
 import { formatDate, formatTime, isISODate } from '@/lib/dates';
+import { useMarket } from '@/lib/live';
 import { dueNow, formatMyr, POLICIES, quote, WEATHER_PROMISE } from '@/lib/pricing';
-import { availableTimes } from '@/lib/repo';
 import { useStore } from '@/lib/store';
 import type { Booking, PaymentMethod, PayOption, Trip } from '@/lib/types';
 
@@ -44,7 +44,16 @@ function useHold(key: string) {
   return { secondsLeft, renew: () => setAttempt((n) => n + 1) };
 }
 
-export function Checkout({ trip }: { trip: Trip }) {
+/** Resolves the listing in the browser, where operator edits and new listings live. */
+export function Checkout({ id, base }: { id: string; base?: Trip }) {
+  const market = useMarket();
+  const trip = market.getTrip(id) ?? base;
+  if (!trip) return market.ready ? <TripNotFound /> : <div className="container page muted">Loading…</div>;
+  return <CheckoutForm trip={trip} />;
+}
+
+function CheckoutForm({ trip }: { trip: Trip }) {
+  const market = useMarket();
   const params = useSearchParams();
   const router = useRouter();
   const { user, ready, login, addBooking, updateProfile, bookings } = useStore();
@@ -73,12 +82,12 @@ export function Checkout({ trip }: { trip: Trip }) {
   }, [user]);
 
   const back = tripHref(trip, date ?? undefined, anglers);
-  const alreadyBooked = bookings.find((b) => b.tripId === trip.id && b.date === date && b.time === time && b.status !== 'CANCELLED');
-  const slotOpen = !!date && !!time && availableTimes(trip, date).includes(time);
+  const alreadyBooked = bookings.find((b) => b.tripId === trip.id && b.date === date && b.time === time && b.status !== 'CANCELLED' && b.userEmail === user?.email);
+  const slotOpen = !!date && !!time && market.openTimes(trip, date).includes(time);
 
   if (!ready) return <div className="container page muted">Loading…</div>;
 
-  if (!slotOpen || (alreadyBooked && !submitting)) {
+  if (!slotOpen && !submitting) {
     return (
       <div className="container page narrow">
         <div className="empty">
@@ -230,7 +239,7 @@ export function Checkout({ trip }: { trip: Trip }) {
             <div>
               <strong>{trip.title}</strong>
               <span className="muted small">{trip.operator.name}</span>
-              <span className="rating small"><Icon name="star" size={12} filled /> {trip.rating.toFixed(2)} ({trip.reviewsCount})</span>
+              <span className="small"><Rating trip={trip} size={12} /></span>
             </div>
           </div>
           <dl className="summary-facts">

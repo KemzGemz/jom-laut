@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { Icon } from '@/components/Icon';
 import { TripCard } from '@/components/TripCard';
-import { getTrip } from '@/lib/repo';
+import { useMarket } from '@/lib/live';
 import { useStore } from '@/lib/store';
 import type { Trip } from '@/lib/types';
 
 export default function WishlistPage() {
   const { wishlist, ready } = useStore();
+  const { getTrip } = useMarket();
   if (!ready) return <div className="container page muted">Loading…</div>;
 
   const trips = wishlist.map(getTrip).filter((t): t is Trip => Boolean(t));

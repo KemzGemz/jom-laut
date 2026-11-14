@@ -21,7 +21,7 @@ export function Logo() {
 }
 
 export function Header() {
-  const { user, ready, logout, bookings } = useStore();
+  const { user, ready, logout, bookings, operatorId } = useStore();
   const [open, setOpen] = useState<'menu' | 'lang' | null>(null);
   const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
@@ -40,6 +40,14 @@ export function Header() {
     };
   }, [open]);
 
+  // One link changes with where you are: into the operator side, or back out of it.
+  const inOperator = pathname.startsWith('/operator');
+  const hostLink = inOperator
+    ? { href: '/', label: 'Switch to booking trips' }
+    : ready && operatorId
+      ? { href: '/operator', label: 'Operator dashboard' }
+      : { href: '/host', label: 'List your boat' };
+
   const upcoming = user ? bookings.filter((b) => b.userEmail === user.email && b.status !== 'CANCELLED').length : 0;
 
   return (
@@ -47,7 +55,7 @@ export function Header() {
       <div className="container header-inner">
         <Logo />
         <div className="header-right" ref={ref}>
-          <Link href="/host" className="ghost-link hide-sm">List your boat</Link>
+          <Link href={hostLink.href} className="ghost-link hide-sm">{hostLink.label}</Link>
 
           <div className="pop-anchor">
             <button className="icon-btn" aria-label="Language" aria-expanded={open === 'lang'} onClick={() => setOpen(open === 'lang' ? null : 'lang')}>
@@ -78,7 +86,7 @@ export function Header() {
                     <Link className="menu-item" href="/wishlist">Wishlist</Link>
                     <Link className="menu-item" href="/account">Account</Link>
                     <div className="menu-sep" />
-                    <Link className="menu-item" href="/host">List your boat</Link>
+                    <Link className="menu-item" href={hostLink.href}>{hostLink.label}</Link>
                     <button className="menu-item" onClick={() => { logout(); setOpen(null); }}>Log out</button>
                   </>
                 ) : (
@@ -87,7 +95,7 @@ export function Header() {
                     <Link className="menu-item" href="/login">Log in</Link>
                     <div className="menu-sep" />
                     <Link className="menu-item" href="/wishlist">Wishlist</Link>
-                    <Link className="menu-item" href="/host">List your boat</Link>
+                    <Link className="menu-item" href={hostLink.href}>{hostLink.label}</Link>
                   </>
                 )}
               </div>
@@ -106,6 +114,7 @@ export function Footer() {
         <span>© {new Date().getFullYear()} AngleX · Fishing trips and boat charters in Malaysia</span>
         <nav>
           <Link href="/host">List your boat</Link>
+          <Link href="/operator">Operator dashboard</Link>
           <Link href="/bookings">My bookings</Link>
         </nav>
       </div>

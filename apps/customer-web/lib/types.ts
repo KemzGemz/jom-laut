@@ -15,6 +15,7 @@ export const TRIP_TYPE_LABELS: Record<TripType, string> = {
 export type CancellationPolicy = 'flexible' | 'moderate' | 'strict';
 
 export interface Operator {
+  id: string;
   name: string;
   verified: boolean;
   since: number;
@@ -31,7 +32,10 @@ export interface Review {
 /** A bookable listing. One booking = the whole boat for one departure. All money is integer sen. */
 export interface Trip {
   id: string;
+  /** Seeds the sample availability and bookings. 0 for listings an operator created, which start empty. */
   seed: number;
+  /** Hidden from search and closed to new bookings. */
+  paused?: boolean;
   title: string;
   operator: Operator;
   state: string;
@@ -105,5 +109,7 @@ export interface Booking {
   status: BookingStatus;
   createdAt: string;
   cancelledAt?: string;
+  cancelledBy?: 'customer' | 'operator';
+  cancelReason?: string;
   refundSen?: number;
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 
@@ -24,6 +25,7 @@ export default function HostPage() {
             <li><Icon name="check" size={16} /> One calendar, so no more double bookings.</li>
             <li><Icon name="check" size={16} /> Choose instant booking or approve each request yourself.</li>
           </ul>
+          <p className="host-demo">Already listed with us? <Link className="link" href="/operator">Open the operator dashboard</Link></p>
         </div>
 
         <form className="card form" onSubmit={(e) => { e.preventDefault(); setSent(true); }}>

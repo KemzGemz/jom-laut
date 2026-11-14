@@ -215,6 +215,7 @@ function build(area: Area, t: Template, index: number, seed: number): Trip {
     seed,
     title,
     operator: {
+      id: operatorName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
       name: operatorName,
       verified: seed % 5 !== 0,
       since: 2012 + (seed % 10),

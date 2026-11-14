@@ -5,23 +5,22 @@ import { useEffect, useState } from 'react';
 import { Calendar } from '@/components/Calendar';
 import { Stepper } from '@/components/Stepper';
 import { addDays, formatDate, formatTime, today, type ISODate } from '@/lib/dates';
+import { useMarket } from '@/lib/live';
 import { formatMyr, quote } from '@/lib/pricing';
-import { availableTimes, BOOKING_WINDOW_DAYS } from '@/lib/repo';
-import { useStore } from '@/lib/store';
+import { BOOKING_WINDOW_DAYS } from '@/lib/repo';
 import type { Trip } from '@/lib/types';
 
 export function BookingCard({ trip, initialDate, initialAnglers }: { trip: Trip; initialDate?: ISODate; initialAnglers?: number }) {
   const router = useRouter();
-  const { bookings, ready } = useStore();
-  // Availability depends on "today" and on the saved session, so it is only worked out in the browser.
+  const market = useMarket();
+  const ready = market.ready;
+  // Availability depends on "today" and on what has been booked or closed, so it is only worked out in the browser.
   const [mounted, setMounted] = useState(false);
   const [date, setDate] = useState<ISODate | null>(null);
   const [time, setTime] = useState<string | null>(null);
   const [anglers, setAnglers] = useState(Math.min(Math.max(initialAnglers ?? 2, 1), trip.maxAnglers));
 
-  // Departures this customer already holds are no longer on offer.
-  const mine = bookings.filter((b) => b.tripId === trip.id && b.status !== 'CANCELLED');
-  const openTimes = (d: ISODate) => availableTimes(trip, d).filter((t) => !mine.some((b) => b.date === d && b.time === t));
+  const openTimes = (d: ISODate) => market.openTimes(trip, d);
   const isOpen = (d: ISODate) => openTimes(d).length > 0;
 
   useEffect(() => {
@@ -54,7 +53,8 @@ export function BookingCard({ trip, initialDate, initialAnglers }: { trip: Trip;
     <aside className="booking-card" id="book">
       <div className="bc-price"><strong>{formatMyr(trip.priceSen)}</strong> <span className="muted">per boat</span></div>
 
-      {unavailableRequested && (
+      {trip.paused && <p className="notice warn">This trip is not taking bookings at the moment.</p>}
+      {!trip.paused && unavailableRequested && (
         <p className="notice warn">Not available on {formatDate(initialDate)}. Pick another date below.</p>
       )}
 

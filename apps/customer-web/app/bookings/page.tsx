@@ -8,7 +8,7 @@ import { TripPhoto } from '@/components/TripCard';
 import { STAGE_LABELS, stageOf } from '@/lib/bookings';
 import { formatDate, formatTime } from '@/lib/dates';
 import { formatMyr } from '@/lib/pricing';
-import { getTrip } from '@/lib/repo';
+import { useMarket } from '@/lib/live';
 import { useStore } from '@/lib/store';
 
 const TABS = { upcoming: 'Upcoming', past: 'Past', cancelled: 'Cancelled' } as const;
@@ -16,6 +16,7 @@ type Tab = keyof typeof TABS;
 
 export default function BookingsPage() {
   const { user, ready, bookings } = useStore();
+  const { getTrip } = useMarket();
   const [tab, setTab] = useState<Tab>('upcoming');
 
   if (!ready) return <div className="container page muted">Loading…</div>;

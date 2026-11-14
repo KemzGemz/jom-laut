@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { formatDate, type ISODate } from '@/lib/dates';
+import { useMarket } from '@/lib/live';
 import { formatMyr } from '@/lib/pricing';
 import { useStore } from '@/lib/store';
 import { TRIP_TYPE_LABELS, type Trip } from '@/lib/types';
@@ -45,7 +46,34 @@ export function tripHref(trip: Trip, date?: ISODate, anglers?: number): string {
   return `/trips/${trip.id}${qs ? `?${qs}` : ''}`;
 }
 
-export function TripCard({ trip, date, anglers }: { trip: Trip; date?: ISODate; anglers?: number }) {
+/** Star rating, or "New" for a listing nobody has reviewed yet. */
+export function Rating({ trip, size = 13, count = true }: { trip: Trip; size?: number; count?: boolean }) {
+  if (trip.reviewsCount === 0) return <span className="rating">New</span>;
+  return (
+    <span className="rating">
+      <Icon name="star" size={size} filled /> {trip.rating.toFixed(2)} {count && <span className="muted">({trip.reviewsCount})</span>}
+    </span>
+  );
+}
+
+export function TripNotFound() {
+  return (
+    <div className="container page narrow">
+      <div className="empty">
+        <Icon name="fish" size={32} />
+        <h1>Trip not found</h1>
+        <p className="muted">This listing may have been removed, or the link is out of date.</p>
+        <Link className="btn btn-primary" href="/search">Browse trips</Link>
+      </div>
+    </div>
+  );
+}
+
+export function TripCard({ trip: listed, date, anglers }: { trip: Trip; date?: ISODate; anglers?: number }) {
+  // The operator may have edited, paused or closed this listing since the page was rendered.
+  const market = useMarket();
+  const trip = market.getTrip(listed.id) ?? listed;
+  if (market.ready && (trip.paused || (date && !market.isOpen(trip, date)))) return null;
   return (
     <Link className="trip-card" href={tripHref(trip, date, anglers)}>
       <div className="media">
@@ -55,7 +83,7 @@ export function TripCard({ trip, date, anglers }: { trip: Trip; date?: ISODate; 
       </div>
       <div className="card-top">
         <span className="card-place">{trip.district}, {trip.state}</span>
-        <span className="rating"><Icon name="star" size={13} filled /> {trip.rating.toFixed(2)} <span className="muted">({trip.reviewsCount})</span></span>
+        <Rating trip={trip} />
       </div>
       <div className="card-title">{trip.title}</div>
       <div className="muted card-meta">

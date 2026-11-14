@@ -6,6 +6,7 @@ import { Icon } from '@/components/Icon';
 import { SearchBar } from '@/components/SearchBar';
 import { TripCard } from '@/components/TripCard';
 import { formatDate, isISODate } from '@/lib/dates';
+import { useMarket } from '@/lib/live';
 import { formatMyr } from '@/lib/pricing';
 import { PRICE_CEILING_SEN, searchTrips } from '@/lib/repo';
 import { TRIP_TYPE_LABELS, type SearchQuery, type SortKey, type TripType } from '@/lib/types';
@@ -45,7 +46,8 @@ export function SearchResults() {
     };
   }, [params]);
 
-  const results = useMemo(() => searchTrips(query), [query]);
+  const market = useMarket();
+  const results = useMemo(() => searchTrips(query, market), [query, market]);
 
   function update(patch: Record<string, string | undefined>) {
     const next = new URLSearchParams(params.toString());

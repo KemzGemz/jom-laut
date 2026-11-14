@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { SignInPrompt } from '@/components/SignInPrompt';
@@ -9,11 +9,13 @@ import { TripPhoto } from '@/components/TripCard';
 import { STAGE_LABELS, stageOf } from '@/lib/bookings';
 import { daysBetween, formatDate, formatTime, today } from '@/lib/dates';
 import { formatMyr, POLICIES, refundFor } from '@/lib/pricing';
-import { getTrip } from '@/lib/repo';
+import { useMarket } from '@/lib/live';
 import { useStore } from '@/lib/store';
 
 function BookingDetail({ bookingRef }: { bookingRef: string }) {
-  const { user, ready, bookings, updateBooking } = useStore();
+  const { user, ready, bookings, updateBooking, setOperator } = useStore();
+  const { getTrip } = useMarket();
+  const router = useRouter();
   const justBooked = useSearchParams().get('new') === '1';
   const [cancelling, setCancelling] = useState(false);
 
@@ -44,19 +46,22 @@ function BookingDetail({ bookingRef }: { bookingRef: string }) {
     pending: justBooked ? 'Request sent' : 'Waiting for the operator',
     confirmed: justBooked ? 'You are going fishing!' : 'Booking confirmed',
     completed: 'Trip completed',
-    cancelled: 'Booking cancelled',
+    cancelled: booking.cancelledBy === 'operator' ? (booking.paidSen === 0 ? 'The operator could not take this trip' : 'Cancelled by the operator') : 'Booking cancelled',
   }[stage];
   const detail = {
     pending: `${trip.operator.name} usually replies ${trip.operator.responseTime}. You are only charged if they accept.`,
     confirmed: `A confirmation was sent to ${booking.userEmail}. Meet the crew at ${trip.jetty} 20 minutes before departure.`,
     completed: 'Hope the icebox came back full.',
-    cancelled: booking.paidSen === 0 ? 'Nothing was charged for this request.' : booking.refundSen ? `${formatMyr(booking.refundSen)} is on its way back to your original payment method.` : 'No refund was due under the cancellation policy.',
+    cancelled: booking.cancelledBy === 'operator'
+      ? `${booking.cancelReason ? `${trip.operator.name} said: "${booking.cancelReason}" ` : ''}${booking.refundSen ? `${formatMyr(booking.refundSen)} is on its way back to your original payment method.` : 'Nothing was charged.'}`
+      : booking.paidSen === 0 ? 'Nothing was charged for this request.' : booking.refundSen ? `${formatMyr(booking.refundSen)} is on its way back to your original payment method.` : 'No refund was due under the cancellation policy.',
   }[stage];
 
   function cancel() {
     updateBooking(booking!.ref, {
       status: 'CANCELLED',
       cancelledAt: new Date().toISOString(),
+      cancelledBy: 'customer',
       refundSen,
       paidSen: stage === 'pending' ? 0 : booking!.paidSen,
     });
@@ -124,7 +129,7 @@ function BookingDetail({ bookingRef }: { bookingRef: string }) {
 
       {stage === 'pending' && (
         <p className="muted small demo-note">
-          Prototype only: <button className="link-btn" onClick={() => updateBooking(booking.ref, { status: 'CONFIRMED' })}>simulate the operator accepting</button>
+          Prototype only: <button className="link-btn" onClick={() => { setOperator(trip.operator.id); router.push(`/operator/bookings/${booking.ref}`); }}>open this request as {trip.operator.name}</button> to accept or decline it.
         </p>
       )}
       {(stage === 'completed' || stage === 'cancelled') && <Link className="btn btn-primary" href={`/trips/${trip.id}`}>Book this trip again</Link>}

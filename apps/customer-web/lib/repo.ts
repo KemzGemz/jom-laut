@@ -9,6 +9,10 @@ import type { SearchQuery, Trip } from './types';
 
 export const BOOKING_WINDOW_DAYS = 120;
 
+export function allTrips(): Trip[] {
+  return TRIPS;
+}
+
 export function getTrip(id: string): Trip | undefined {
   return TRIPS.find((t) => t.id === id);
 }
@@ -48,21 +52,43 @@ function hash(a: number, b: number, c = 0): number {
 
 /** Departure times still open on a date. Bookings open from tomorrow, up to the booking window. */
 export function availableTimes(trip: Trip, date: ISODate, from: ISODate = today()): string[] {
-  if (date <= from || date > addDays(from, BOOKING_WINDOW_DAYS)) return [];
-  const day = dayNumber(date);
-  if ((day + trip.seed) % 7 === 2) return []; // the operator's weekly rest day
-  return trip.departureTimes.filter((_, slot) => hash(trip.seed, day, slot) % 4 !== 0);
+  if (!inBookingWindow(date, from) || isRestDay(trip, date)) return [];
+  return trip.departureTimes.filter((_, slot) => sampleSlot(trip, date, slot) === null);
+}
+
+export function inBookingWindow(date: ISODate, from: ISODate = today()): boolean {
+  return date > from && date <= addDays(from, BOOKING_WINDOW_DAYS);
+}
+
+/** The operator's weekly day off. Listings created by an operator (seed 0) have none. */
+export function isRestDay(trip: Trip, date: ISODate): boolean {
+  return trip.seed > 0 && (dayNumber(date) + trip.seed) % 7 === 2;
+}
+
+/**
+ * Sample demand: about one departure in four is already taken by another customer.
+ * Returns a stable number identifying that sample booking, or null if the slot is free.
+ */
+export function sampleSlot(trip: Trip, date: ISODate, slot: number): number | null {
+  if (trip.seed <= 0 || isRestDay(trip, date)) return null;
+  const h = hash(trip.seed, dayNumber(date), slot);
+  return h % 4 === 0 ? h : null;
 }
 
 export function isAvailable(trip: Trip, date: ISODate): boolean {
   return availableTimes(trip, date).length > 0;
 }
 
-export function searchTrips(q: SearchQuery): Trip[] {
-  const results = TRIPS.filter((t) => {
+/** `source` lets the browser search the live catalogue (operator edits, blocked dates, new bookings). */
+export function searchTrips(
+  q: SearchQuery,
+  source: { trips: Trip[]; isOpen: (trip: Trip, date: ISODate) => boolean } = { trips: TRIPS, isOpen: isAvailable },
+): Trip[] {
+  const results = source.trips.filter((t) => {
+    if (t.paused) return false;
     if (q.state && t.state !== q.state) return false;
     if (q.district && t.district !== q.district) return false;
-    if (q.date && !isAvailable(t, q.date)) return false;
+    if (q.date && !source.isOpen(t, q.date)) return false;
     if (q.anglers && t.maxAnglers < q.anglers) return false;
     if (q.types?.length && !q.types.includes(t.tripType)) return false;
     if (q.instantOnly && !t.instantBooking) return false;
