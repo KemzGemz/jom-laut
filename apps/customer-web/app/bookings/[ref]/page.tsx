@@ -12,6 +12,34 @@ import { formatMyr, POLICIES, refundFor } from '@/lib/pricing';
 import { useMarket } from '@/lib/live';
 import { useStore } from '@/lib/store';
 
+function ReviewForm({ onSubmit }: { onSubmit: (rating: number, comment: string) => void }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [error, setError] = useState('');
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (rating === 0) return setError('Choose a star rating.');
+    if (comment.trim().length < 10) return setError('Write a sentence about the trip (at least 10 characters).');
+    onSubmit(rating, comment.trim());
+  }
+
+  return (
+    <form className="form" onSubmit={submit} noValidate>
+      <div className="star-pick" role="radiogroup" aria-label="Rating">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button" role="radio" aria-checked={rating === n} aria-label={`${n} star${n === 1 ? '' : 's'}`} className={n <= rating ? 'on' : ''} onClick={() => setRating(n)}>
+            <Icon name="star" size={26} filled={n <= rating} />
+          </button>
+        ))}
+      </div>
+      <label className="field"><span>How was the trip?</span><textarea className="input" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="The boat, the crew, the fishing. What should other anglers know?" /></label>
+      {error && <p className="notice warn" role="alert">{error}</p>}
+      <button className="btn btn-primary" type="submit">Post review</button>
+    </form>
+  );
+}
+
 function BookingDetail({ bookingRef }: { bookingRef: string }) {
   const { user, ready, bookings, updateBooking, setOperator } = useStore();
   const { getTrip } = useMarket();
@@ -127,6 +155,29 @@ function BookingDetail({ bookingRef }: { bookingRef: string }) {
         </section>
       )}
 
+      {stage === 'completed' && (
+        <section className="card">
+          <h2>{booking.review ? 'Your review' : 'Rate this trip'}</h2>
+          {booking.review ? (
+            <>
+              <p className="stars" aria-label={`${booking.review.rating} out of 5`}>{[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={16} filled={n <= booking.review!.rating} />)}</p>
+              <p>{booking.review.comment}</p>
+              <p className="muted small">Thank you. Your review is now on the <Link className="link" href={`/trips/${trip.id}#reviews`}>trip page</Link>.</p>
+            </>
+          ) : (
+            <>
+              <p className="muted">Only anglers who completed a trip can review it, so your word carries weight with the next group.</p>
+              <ReviewForm onSubmit={(rating, comment) => updateBooking(booking.ref, { review: { rating, comment } })} />
+            </>
+          )}
+        </section>
+      )}
+
+      {stage === 'confirmed' && (
+        <p className="muted small demo-note">
+          Prototype only: <button className="link-btn" onClick={() => updateBooking(booking.ref, { completedAt: new Date().toISOString() })}>mark this trip as completed</button> to try leaving a review.
+        </p>
+      )}
       {stage === 'pending' && (
         <p className="muted small demo-note">
           Prototype only: <button className="link-btn" onClick={() => { setOperator(trip.operator.id); router.push(`/operator/bookings/${booking.ref}`); }}>open this request as {trip.operator.name}</button> to accept or decline it.

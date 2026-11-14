@@ -5,12 +5,34 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Icon } from '@/components/Icon';
 import { useOperator } from '@/lib/live';
-import { COMMISSION_PCT } from '@/lib/market';
+import { TripPhoto } from '@/components/TripCard';
+import { COMMISSION_PCT, starterListing } from '@/lib/market';
 import { formatMyr, POLICIES } from '@/lib/pricing';
 import { useStore } from '@/lib/store';
 import { TRIP_TYPE_LABELS, type CancellationPolicy, type Trip, type TripType } from '@/lib/types';
 
 const DEPOSIT_MIN_RM = 1000;
+const MAX_PHOTOS = 5;
+
+/** Shrinks a photo in the browser so a handful of them fit in local storage. */
+function shrink(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 900 / image.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('unreadable')); };
+    image.src = url;
+  });
+}
+
 const lines = (text: string) => text.split('\n').map((s) => s.trim()).filter(Boolean);
 
 /** Starting point for a new listing: the operator's own jetty, boat and photos. */
@@ -38,7 +60,7 @@ function blank(template: Trip, id: string): Trip {
 
 function ListingForm({ initial, isNew }: { initial: Trip; isNew: boolean }) {
   const router = useRouter();
-  const { saveListing } = useStore();
+  const { saveListing, storageFull } = useStore();
   const [t, setT] = useState(initial);
   const [price, setPrice] = useState(initial.priceSen ? String(initial.priceSen / 100) : '');
   const [species, setSpecies] = useState(initial.targetSpecies.join(', '));
@@ -52,6 +74,17 @@ function ListingForm({ initial, isNew }: { initial: Trip; isNew: boolean }) {
   const depositAllowed = priceRm >= DEPOSIT_MIN_RM;
   const keepSen = Math.round(priceRm * 100 * (1 - COMMISSION_PCT / 100));
 
+  async function addPhotos(files: FileList | null) {
+    const room = MAX_PHOTOS - t.images.length;
+    const picked = [...(files ?? [])].filter((f) => f.type.startsWith('image/')).slice(0, room);
+    try {
+      const added = await Promise.all(picked.map(shrink));
+      setT((prev) => ({ ...prev, images: [...prev.images, ...added].slice(0, MAX_PHOTOS) }));
+    } catch {
+      setError('One of those files could not be read as a photo. Try a JPEG or PNG.');
+    }
+  }
+
   function save(e: React.FormEvent) {
     e.preventDefault();
     const first = t.departureTimes[0] ?? '';
@@ -62,6 +95,7 @@ function ListingForm({ initial, isNew }: { initial: Trip; isNew: boolean }) {
     if (second && second === first) return setError('The two departure times are the same. Clear the second one or change it.');
     if (t.description.trim().length < 40) return setError('Describe the trip in a sentence or two (at least 40 characters) so anglers know what to expect.');
     if (lines(species.replace(/,/g, '\n')).length === 0) return setError('Add at least one target fish.');
+    if (t.images.length === 0) return setError('Add at least one photo. Listings with a clear photo of the boat get far more bookings.');
     setError('');
 
     saveListing({
@@ -131,7 +165,30 @@ function ListingForm({ initial, isNew }: { initial: Trip; isNew: boolean }) {
           {num('maxAnglers', 'Most anglers on board', 1, 20)}
           <label className="check"><input type="checkbox" checked={t.hasBathroom} onChange={(e) => set({ hasBathroom: e.target.checked })} /><span><strong>Toilet on board</strong></span></label>
         </div>
-        <p className="muted small">Photos: this prototype reuses your existing boat photos. Uploading comes with the real backend.</p>
+      </section>
+
+      <section className="step">
+        <h2>Photos</h2>
+        <ul className="photo-grid">
+          {t.images.map((src, i) => (
+            <li key={src.slice(-40) + i}>
+              <TripPhoto src={src} alt={`Photo ${i + 1}`} />
+              {i === 0 && <span className="badge">Cover</span>}
+              <button type="button" className="photo-remove" aria-label={`Remove photo ${i + 1}`} onClick={() => set({ images: t.images.filter((_, k) => k !== i) })}><Icon name="x" size={14} /></button>
+            </li>
+          ))}
+          {t.images.length < MAX_PHOTOS && (
+            <li>
+              <label className="photo-add">
+                <Icon name="plus" />
+                <span>Add photos</span>
+                <input type="file" accept="image/*" multiple onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }} />
+              </label>
+            </li>
+          )}
+        </ul>
+        <p className="muted small">Up to {MAX_PHOTOS} photos. The first one is the cover anglers see in search. Show the boat, the deck and a good catch.</p>
+        {storageFull && <p className="notice warn">This browser has run out of space for the prototype, so new photos may not be kept after a reload. Remove some photos to free space.</p>}
       </section>
 
       <section className="step">
@@ -195,7 +252,7 @@ export default function OperatorListing({ params }: { params: { id: string } }) 
   const [newId] = useState(() => `${account?.id ?? 'listing'}-${Date.now().toString(36)}`);
   const isNew = params.id === 'new';
   const existing = listings.find((t) => t.id === params.id);
-  const template = listings[0];
+  const template = listings[0] ?? (account?.profile ? starterListing(account.profile) : undefined);
 
   if (isNew && template) return <ListingForm initial={blank(template, newId)} isNew />;
   if (existing) return <ListingForm key={existing.id} initial={existing} isNew={false} />;

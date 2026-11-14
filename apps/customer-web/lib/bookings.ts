@@ -7,7 +7,7 @@ export type BookingStage = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 export function stageOf(b: Booking): BookingStage {
   if (b.status === 'CANCELLED') return 'cancelled';
   if (b.status === 'PENDING_APPROVAL') return 'pending';
-  return b.date < today() ? 'completed' : 'confirmed';
+  return b.date < today() || b.completedAt ? 'completed' : 'confirmed';
 }
 
 export const STAGE_LABELS: Record<BookingStage, string> = {

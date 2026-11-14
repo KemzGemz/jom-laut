@@ -12,9 +12,9 @@ export const HISTORY_DAYS = 90;
 
 /** The catalogue and availability as they stand in this browser, for both customers and operators. */
 export function useMarket() {
-  const { bookings, blocked, listings, overrides, ready } = useStore();
+  const { bookings, blocked, listings, overrides, accounts, ready } = useStore();
   return useMemo(() => {
-    const state: MarketState = { bookings, blocked, listings, overrides };
+    const state: MarketState = { bookings, blocked, listings, overrides, accounts };
     const trips = catalogue(state);
     const byId = new Map(trips.map((t) => [t.id, t]));
     const times = (trip: Trip, date: ISODate) => openTimes(trip, date, state);
@@ -26,7 +26,7 @@ export function useMarket() {
       openTimes: times,
       isOpen: (trip: Trip, date: ISODate) => times(trip, date).length > 0,
     };
-  }, [bookings, blocked, listings, overrides, ready]);
+  }, [bookings, blocked, listings, overrides, accounts, ready]);
 }
 
 export interface OperatorBooking extends Booking {
@@ -38,7 +38,7 @@ export function useOperator(): { ready: boolean; account: OperatorAccount | unde
   const { operatorId } = useStore();
   const market = useMarket();
   return useMemo(() => {
-    const account = operators(market.trips).find((o) => o.id === operatorId);
+    const account = operators(market.trips, market.state.accounts).find((o) => o.id === operatorId);
     const listings = account?.listings ?? [];
     const now = today();
     const bookings = listings

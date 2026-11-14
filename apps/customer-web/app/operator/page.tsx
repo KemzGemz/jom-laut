@@ -22,6 +22,19 @@ export default function OperatorOverview() {
   const upcoming = net(bookings.filter((b) => stageOf(b) === 'confirmed'));
   const live = listings.filter((t) => !t.paused).length;
 
+  if (listings.length === 0) {
+    return (
+      <div className="container page narrow">
+        <div className="empty">
+          <Icon name="anchor" size={32} />
+          <h1>Welcome aboard</h1>
+          <p className="muted">Your operator account is set up. Publish your first trip so anglers can find and book your boat. We check your boat licence while you do.</p>
+          <Link className="btn btn-primary" href="/operator/listings/new">Create your first listing</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container page">
       <ul className="stats">

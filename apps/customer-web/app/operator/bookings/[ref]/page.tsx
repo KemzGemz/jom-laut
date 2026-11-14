@@ -123,6 +123,14 @@ export default function OperatorBooking({ params }: { params: { ref: string } })
         )}
       </section>
 
+      {b.review && (
+        <section className="card">
+          <h2>Customer review</h2>
+          <p className="stars" aria-label={`${b.review.rating} out of 5`}>{[1, 2, 3, 4, 5].map((n) => <Icon key={n} name="star" size={16} filled={n <= b.review!.rating} />)}</p>
+          <p>{b.review.comment}</p>
+        </section>
+      )}
+
       {stage === 'confirmed' && !closing && (
         <button className="btn btn-outline" onClick={() => setClosing(true)}>Cancel this trip</button>
       )}

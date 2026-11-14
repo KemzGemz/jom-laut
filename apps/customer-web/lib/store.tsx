@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ISODate } from './dates';
 import { EMPTY_MARKET, type MarketState } from './market';
-import type { Booking, Trip, User } from './types';
+import type { Booking, OperatorProfile, Trip, User } from './types';
 
 interface Persisted extends MarketState {
   user: User | null;
@@ -20,6 +20,8 @@ interface Persisted extends MarketState {
 interface Store extends Persisted {
   /** False until localStorage has been read; render neutral UI until then. */
   ready: boolean;
+  /** True once a save did not fit in the browser's storage, so later changes may not survive a reload. */
+  storageFull: boolean;
   login: (email: string, name?: string) => void;
   logout: () => void;
   updateProfile: (patch: Partial<User>) => void;
@@ -30,6 +32,8 @@ interface Store extends Persisted {
   setOperator: (id: string | null) => void;
   setBlocked: (tripIds: string[], date: ISODate, blocked: boolean) => void;
   saveListing: (trip: Trip) => void;
+  /** Registers an operator and signs this browser in as them. */
+  addAccount: (profile: OperatorProfile) => void;
 }
 
 const KEY = 'anglex.session.v1';
@@ -43,6 +47,7 @@ function titleCase(s: string): string {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Persisted>(EMPTY);
   const [ready, setReady] = useState(false);
+  const [storageFull, setStorageFull] = useState(false);
 
   useEffect(() => {
     try {
@@ -61,6 +66,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         window.localStorage.setItem(KEY, JSON.stringify(next));
       } catch {
         /* storage full or blocked: keep the in-memory session */
+        setStorageFull(true);
       }
       return next;
     });
@@ -70,6 +76,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => ({
       ...state,
       ready,
+      storageFull,
       login: (email, name) =>
         commit((s) => ({ ...s, user: { email, name: name?.trim() || titleCase(email.split('@')[0] ?? 'Angler') } })),
       logout: () => commit((s) => ({ ...s, user: null })),
@@ -97,8 +104,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return { ...s, blocked: next };
         }),
       saveListing: (trip) => commit((s) => ({ ...s, listings: { ...s.listings, [trip.id]: trip } })),
+      addAccount: (profile) => commit((s) => ({ ...s, accounts: { ...s.accounts, [profile.id]: profile }, operatorId: profile.id })),
     }),
-    [state, ready, commit],
+    [state, ready, storageFull, commit],
   );
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;

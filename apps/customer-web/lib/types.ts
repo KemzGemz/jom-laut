@@ -22,6 +22,19 @@ export interface Operator {
   responseTime: string;
 }
 
+/** An operator who registered in this browser, before or after publishing a listing. */
+export interface OperatorProfile {
+  id: string;
+  name: string;
+  contactName: string;
+  phone: string;
+  state: string;
+  district: string;
+  jetty: string;
+  boatName: string;
+  boatSizeFt: number;
+}
+
 export interface Review {
   author: string;
   rating: number;
@@ -108,6 +121,10 @@ export interface Booking {
   method: PaymentMethod;
   status: BookingStatus;
   createdAt: string;
+  /** Prototype shortcut: treat the trip as finished before its date has passed. */
+  completedAt?: string;
+  /** Left by the customer after the trip. */
+  review?: { rating: number; comment: string };
   cancelledAt?: string;
   cancelledBy?: 'customer' | 'operator';
   cancelReason?: string;

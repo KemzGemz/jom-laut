@@ -16,7 +16,7 @@ Then open http://localhost:3000.
 
 The app currently runs on a sample catalogue with no backend. Sign-in needs no password, nothing is charged, and everything you change (bookings, closed dates, listing edits) is kept in the browser's localStorage.
 
-The operator side is at http://localhost:3000/operator. Pick one of the sample operators to see their dashboard.
+The operator side is at http://localhost:3000/operator. Pick one of the sample operators to see their dashboard, or register a new one at http://localhost:3000/host.
 
 ## What is in the repo
 
@@ -39,7 +39,7 @@ An admin app does not exist yet.
 4. **Checkout** `/book/[id]` : slot hold timer, sign-in, trip leader details, pay in full or deposit, policy acceptance.
 5. **Bookings** `/bookings` and `/bookings/[ref]` : confirmation, status, payment summary, cancellation with the refund shown first.
 
-Also: `/wishlist`, `/account`, `/login`, `/host` (operator interest form).
+Also: `/wishlist`, `/account`, `/login`, `/host` (operator sign-up).
 
 ## Operator journey
 
@@ -48,8 +48,12 @@ Everything lives under `/operator`, and both sides share one set of rules, so wh
 1. **Overview** `/operator` : requests waiting for a reply, trips in the next 7 days, earnings.
 2. **Bookings** `/operator/bookings` and `/operator/bookings/[ref]` : accept or decline a request, cancel a trip with a full refund, see the payout.
 3. **Calendar** `/operator/calendar` : one month per listing; close or reopen a date.
-4. **Listings** `/operator/listings` : edit price, departures, booking mode and policy; pause a listing; publish a new one.
+4. **Listings** `/operator/listings` : edit price, departures, photos, booking mode and policy; pause a listing; publish a new one.
 5. **Earnings** `/operator/earnings` : payout per month and per trip after the 10% commission (a placeholder rate).
+
+New operators register at `/host`, which creates their account and takes them to their first listing. Photos are shrunk in the browser and kept in localStorage.
+
+After a completed trip the customer can rate it on the booking page; the review appears on the trip page and on the operator's booking. A confirmed booking has a prototype-only link to mark it completed.
 
 To try the full loop: request a trip marked "Request to book" as a customer, then use the link on the booking page to open that request as its operator.
 

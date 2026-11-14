@@ -6,7 +6,7 @@
 import { addDays, daysBetween, today, type ISODate } from './dates';
 import { quote } from './pricing';
 import { allTrips, getTrip as baseTrip, inBookingWindow, isRestDay, sampleSlot } from './repo';
-import type { Booking, Trip } from './types';
+import type { Booking, OperatorProfile, Review, Trip } from './types';
 
 export interface MarketState {
   bookings: Booking[];
@@ -16,9 +16,11 @@ export interface MarketState {
   listings: Record<string, Trip>;
   /** Operator decisions on sample bookings, by booking reference. */
   overrides: Record<string, Partial<Booking>>;
+  /** Operators who registered in this browser, by operator id. */
+  accounts: Record<string, OperatorProfile>;
 }
 
-export const EMPTY_MARKET: MarketState = { bookings: [], blocked: {}, listings: {}, overrides: {} };
+export const EMPTY_MARKET: MarketState = { bookings: [], blocked: {}, listings: {}, overrides: {}, accounts: {} };
 
 /** What the operator keeps: the boat price less this commission. The customer's service fee is separate. */
 export const COMMISSION_PCT = 10;
@@ -26,7 +28,18 @@ export const COMMISSION_PCT = 10;
 export function catalogue(state: MarketState): Trip[] {
   const base = allTrips();
   const ids = new Set(base.map((t) => t.id));
-  return [...base.map((t) => state.listings[t.id] ?? t), ...Object.values(state.listings).filter((t) => !ids.has(t.id))];
+  const trips = [...base.map((t) => state.listings[t.id] ?? t), ...Object.values(state.listings).filter((t) => !ids.has(t.id))];
+  return state.bookings.some((b) => b.review) ? trips.map((t) => withReviews(t, state.bookings)) : trips;
+}
+
+/** Folds reviews customers left in this browser into a listing's rating and review list. */
+function withReviews(trip: Trip, bookings: Booking[]): Trip {
+  const added = bookings.filter((b) => b.tripId === trip.id && b.review);
+  if (added.length === 0) return trip;
+  const reviews: Review[] = added.map((b) => ({ author: b.organiserName.split(' ')[0] ?? 'Angler', rating: b.review!.rating, comment: b.review!.comment, when: 'this week' }));
+  const total = trip.rating * trip.reviewsCount + reviews.reduce((sum, r) => sum + r.rating, 0);
+  const reviewsCount = trip.reviewsCount + reviews.length;
+  return { ...trip, reviews: [...reviews, ...trip.reviews], reviewsCount, rating: Math.round((total / reviewsCount) * 100) / 100 };
 }
 
 const CUSTOMERS = ['Amir Hakim', 'Jason Lim', 'Siti Aminah', 'Raj Kumar', 'Farid Ismail', 'Chong Wei', 'Nadia Rahman', 'Daniel Tan', 'Hakimi Zain', 'Priya Nair', 'Azlan Shah', 'Marcus Lee'];
@@ -117,14 +130,54 @@ export interface OperatorAccount {
   verified: boolean;
   home: string;
   listings: Trip[];
+  /** Present for operators who registered in this browser. */
+  profile?: OperatorProfile;
 }
 
-export function operators(trips: Trip[]): OperatorAccount[] {
+export function operators(trips: Trip[], accounts: Record<string, OperatorProfile> = {}): OperatorAccount[] {
   const map = new Map<string, OperatorAccount>();
   for (const t of trips) {
     const existing = map.get(t.operator.id);
     if (existing) existing.listings.push(t);
     else map.set(t.operator.id, { id: t.operator.id, name: t.operator.name, verified: t.operator.verified, home: `${t.jetty}, ${t.state}`, listings: [t] });
   }
+  for (const profile of Object.values(accounts)) {
+    const existing = map.get(profile.id);
+    if (existing) existing.profile = profile;
+    else map.set(profile.id, { id: profile.id, name: profile.name, verified: false, home: `${profile.jetty}, ${profile.state}`, listings: [], profile });
+  }
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The form a newly registered operator starts their first listing from. */
+export function starterListing(p: OperatorProfile): Trip {
+  return {
+    id: '',
+    seed: 0,
+    title: '',
+    operator: { id: p.id, name: p.name, verified: false, since: new Date().getFullYear(), responseTime: 'within a few hours' },
+    state: p.state,
+    district: p.district,
+    jetty: p.jetty,
+    tripType: 'bottom',
+    targetSpecies: [],
+    durationHours: 6,
+    departureTimes: ['07:00'],
+    priceSen: 0,
+    depositPct: 0,
+    maxAnglers: 6,
+    boatName: p.boatName,
+    boatSizeFt: p.boatSizeFt,
+    hasBathroom: false,
+    instantBooking: true,
+    cancellation: 'moderate',
+    rating: 0,
+    reviewsCount: 0,
+    images: [],
+    description: '',
+    inclusions: ['Captain and deckhand', 'Fuel', 'Rods, reels and terminal tackle', 'Bait', 'Life jackets for every angler'],
+    exclusions: ['Meals and snacks', 'Transport to the jetty'],
+    bring: ['IC or passport', 'Sun protection and a hat', 'Motion-sickness tablets if you need them', 'A cooler bag for your catch'],
+    reviews: [],
+  };
 }

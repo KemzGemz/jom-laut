@@ -24,15 +24,15 @@ export function TripView({ id, base, initialDate, initialAnglers }: { id: string
           <h1>{trip.title}</h1>
           <p className="trip-sub">
             <Rating trip={trip} size={14} count={false} />
-            {trip.reviewsCount > 0 && <a href="#reviews">{trip.reviewsCount} reviews</a>}
+            {trip.reviewsCount > 0 && <a href="#reviews">{trip.reviewsCount} review{trip.reviewsCount === 1 ? '' : 's'}</a>}
             <span>{trip.district}, {trip.state}</span>
           </p>
         </div>
         <WishlistButton tripId={trip.id} className="outlined" />
       </header>
 
-      <div className="gallery">
-        {trip.images.map((src, i) => <TripPhoto key={src + i} src={src} alt={`${trip.title}, photo ${i + 1}`} />)}
+      <div className="gallery" data-count={Math.min(trip.images.length, 5)}>
+        {trip.images.slice(0, 5).map((src, i) => <TripPhoto key={src + i} src={src} alt={`${trip.title}, photo ${i + 1}`} />)}
       </div>
 
       <div className="trip-layout">
@@ -100,7 +100,7 @@ export function TripView({ id, base, initialDate, initialAnglers }: { id: string
           </section>
 
           <section id="reviews">
-            <h2>{trip.reviewsCount > 0 ? <><Icon name="star" size={18} filled /> {trip.rating.toFixed(2)} · {trip.reviewsCount} reviews</> : 'No reviews yet'}</h2>
+            <h2>{trip.reviewsCount > 0 ? <><Icon name="star" size={18} filled /> {trip.rating.toFixed(2)} · {trip.reviewsCount} review{trip.reviewsCount === 1 ? '' : 's'}</> : 'No reviews yet'}</h2>
             <div className="reviews">
               {trip.reviews.map((r) => (
                 <figure key={r.author + r.comment} className="review">

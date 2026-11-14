@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from './dates';
-import { catalogue, EMPTY_MARKET, openTimes, operators, payoutOf, sampleBookings, tripBookings, type MarketState } from './market';
+import { stageOf } from './bookings';
+import { catalogue, EMPTY_MARKET, openTimes, operators, payoutOf, sampleBookings, starterListing, tripBookings, type MarketState } from './market';
 import { quote } from './pricing';
 import { allTrips, availableTimes, getTrip, searchTrips } from './repo';
 import type { Booking, Trip } from './types';
@@ -80,6 +81,29 @@ describe('market', () => {
     expect(catalogue(state)).toHaveLength(allTrips().length + 1);
     expect(window30.every((d) => openTimes(created, d, state, now).length === created.departureTimes.length)).toBe(true);
     expect(operators(catalogue(state)).find((o) => o.id === instant.operator.id)!.listings.map((t) => t.id)).toContain(created.id);
+  });
+
+  it('lists a newly registered operator before they have any listing, and attaches their first one', () => {
+    const profile = { id: 'new-boat', name: 'New Boat Co.', contactName: 'Ali', phone: '012-3456789', state: 'Terengganu', district: 'Marang', jetty: 'Jeti Marang', boatName: 'Seri', boatSizeFt: 26 };
+    const state: MarketState = { ...EMPTY_MARKET, accounts: { [profile.id]: profile } };
+    const before = operators(catalogue(state), state.accounts).find((o) => o.id === profile.id)!;
+    expect(before.listings).toEqual([]);
+    expect(before.verified).toBe(false);
+
+    const first: Trip = { ...starterListing(profile), id: 'new-boat-1', title: 'Our first trip out', priceSen: 60000 };
+    const withListing: MarketState = { ...state, listings: { [first.id]: first } };
+    const after = operators(catalogue(withListing), withListing.accounts).find((o) => o.id === profile.id)!;
+    expect(after.listings.map((t) => t.id)).toEqual(['new-boat-1']);
+    expect(searchTrips({ district: 'Marang' }, { trips: catalogue(withListing), isOpen: () => true }).some((t) => t.id === first.id)).toBe(true);
+  });
+
+  it('adds a customer review to the listing and its rating', () => {
+    const reviewed = booking(instant, addDays(now, 3), { completedAt: `${now}T10:00:00`, review: { rating: 1, comment: 'Engine trouble, came back early.' } });
+    expect(stageOf(reviewed)).toBe('completed');
+    const trip = catalogue({ ...EMPTY_MARKET, bookings: [reviewed] }).find((t) => t.id === instant.id)!;
+    expect(trip.reviewsCount).toBe(instant.reviewsCount + 1);
+    expect(trip.reviews[0]).toMatchObject({ rating: 1, comment: 'Engine trouble, came back early.' });
+    expect(trip.rating).toBeLessThan(instant.rating);
   });
 
   it('pays the operator the boat price less commission', () => {

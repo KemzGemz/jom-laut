@@ -19,15 +19,15 @@ const NAV = [
 
 function AccountPicker() {
   const { setOperator } = useStore();
-  const { trips } = useMarket();
+  const { trips, state } = useMarket();
   return (
     <div className="container page narrow">
       <h1>Operator dashboard</h1>
       <p className="muted op-intro">
-        Prototype: choose a sample operator to see their side of AngleX. Real operators will sign in with their own account.
+        Prototype: choose a sample operator to see their side of AngleX, or <Link className="link" href="/host">register your own boat</Link>.
       </p>
       <ul className="op-accounts">
-        {operators(trips).map((o) => (
+        {operators(trips, state.accounts).map((o) => (
           <li key={o.id}>
             <button className="op-account" onClick={() => setOperator(o.id)}>
               <span className="avatar">{o.name.charAt(0)}</span>
@@ -62,7 +62,7 @@ export default function OperatorLayout({ children }: { children: ReactNode }) {
           <div className="op-who">
             <span className="avatar">{account.name.charAt(0)}</span>
             <div>
-              <strong>{account.name}</strong>
+              <strong>{account.name} {!account.verified && <span className="tag">Verification pending</span>}</strong>
               <span className="muted small">{account.home} · <button className="link-btn small" onClick={() => setOperator(null)}>Switch operator</button></span>
             </div>
           </div>

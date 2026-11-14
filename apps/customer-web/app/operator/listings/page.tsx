@@ -20,6 +20,7 @@ export default function OperatorListings() {
         <Link className="btn btn-primary" href="/operator/listings/new"><Icon name="plus" size={16} /> New listing</Link>
       </div>
 
+      {listings.length === 0 && <p className="muted op-intro">You have no listings yet. A listing is one trip anglers can book: a boat, a price and its departure times.</p>}
       <ul className="op-list op-listings">
         {listings.map((t) => {
           const upcoming = bookings.filter((b) => b.trip.id === t.id && ['pending', 'confirmed'].includes(stageOf(b))).length;
