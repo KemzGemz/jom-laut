@@ -1,0 +1,24 @@
+version: 1
+applications:
+  - appRoot: apps/customer-web
+    frontend:
+      # Install and build from the repository root, because this is a pnpm workspace.
+      buildPath: '/'
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22
+            - nvm use 22
+            - npm install -g pnpm@11.17.0
+            # Amplify needs a flat node_modules to package the Next.js server.
+            - pnpm install --frozen-lockfile --config.node-linker=hoisted --filter @jom-laut/customer-web...
+        build:
+          commands:
+            - pnpm --filter @jom-laut/customer-web build
+      artifacts:
+        baseDirectory: apps/customer-web/.next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - apps/customer-web/.next/cache/**/*

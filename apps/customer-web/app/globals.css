@@ -134,6 +134,7 @@ input[type="range"] { width: 100%; accent-color: var(--ink); }
 .rating .muted { font-weight: 400; }
 
 /* ---------- Header and footer ---------- */
+.demo-banner { padding: 7px 16px; background: var(--ink); color: #fff; font-size: 13px; text-align: center; }
 .header { position: sticky; top: 0; z-index: 50; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line-soft); }
 .header-inner { height: var(--header-h); display: flex; align-items: center; justify-content: space-between; }
 .logo { display: inline-flex; align-items: center; gap: 9px; color: var(--brand); font-weight: 800; font-size: 21px; letter-spacing: -0.02em; }

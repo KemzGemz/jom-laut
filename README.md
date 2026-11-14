@@ -18,6 +18,10 @@ The app currently runs on a sample catalogue with no backend. Sign-in needs no p
 
 The operator side is at http://localhost:3000/operator. Pick one of the sample operators to see their dashboard, or register a new one at http://localhost:3000/host.
 
+## Hosting the demo
+
+`amplify.yml` builds the web app on AWS Amplify Hosting (app root `apps/customer-web`). The site shows a demo banner on every page and tells search engines not to index it. The shared password is set in the Amplify console under Access control, not in the code.
+
 ## What is in the repo
 
 | Path | What it is | State |
