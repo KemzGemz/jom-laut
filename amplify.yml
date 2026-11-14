@@ -15,7 +15,8 @@ applications:
             - pnpm install --frozen-lockfile --config.node-linker=hoisted --config.strict-dep-builds=false --filter @jom-laut/customer-web...
         build:
           commands:
-            - pnpm --filter @jom-laut/customer-web build
+            # Run Next.js directly: "pnpm run" would first re-check dependencies with a full install, which fails here.
+            - cd apps/customer-web && npx --no-install next build
       artifacts:
         baseDirectory: apps/customer-web/.next
         files:
