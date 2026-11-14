@@ -1,0 +1,660 @@
+// Jom Laut — PostgreSQL schema (Prisma).
+// All monetary values are Int in sen (minor units). Timestamps are UTC.
+// Constraints enforce the brief's Section 12.7 invariants.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------- Enums -------------------------
+
+enum Role {
+  CUSTOMER
+  OPERATOR
+  OPERATOR_MEMBER
+  ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING_MODERATION
+  PUBLISHED
+  UNPUBLISHED
+  REJECTED
+}
+
+enum BookingModel {
+  INSTANT
+  REQUEST_TO_BOOK
+}
+
+enum PaymentMode {
+  FULL
+  DEPOSIT
+}
+
+enum BookingStatus {
+  DRAFT
+  SLOT_HELD
+  PENDING_PAYMENT
+  PAYMENT_PROCESSING
+  PENDING_OPERATOR_APPROVAL
+  CONFIRMED
+  REJECTED
+  CANCELLATION_REQUESTED
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+  COMPLETED
+  NO_SHOW
+  EXPIRED
+}
+
+enum PaymentStatus {
+  INITIATED
+  PROCESSING
+  CONFIRMED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethod {
+  MANUAL_TRANSFER
+  FPX
+  CARD
+  EWALLET
+}
+
+enum CancelReason {
+  CUSTOMER_REQUEST
+  OPERATOR_REQUEST
+  WEATHER_SAFETY
+  FORCE_MAJEURE
+  ADMIN_OVERRIDE
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ------------------------- Identity & Access -------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  role         Role     @default(CUSTOMER)
+  mfaEnabled   Boolean  @default(false)
+  mfaSecret    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customerProfile CustomerProfile?
+  operatorMembers OperatorMember[]
+  sessions        Session[]
+  bookings        Booking[]
+  notifications   Notification[]
+  auditEntries    AuditLog[]        @relation("AuditActor")
+
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model CustomerProfile {
+  id               String  @id @default(uuid())
+  userId           String  @unique
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emergencyContact String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model OperatorProfile {
+  id             String         @id @default(uuid())
+  displayName    String
+  legalName      String?
+  contactEmail   String
+  contactPhone   String?
+  approvalStatus ApprovalStatus @default(PENDING)
+  // Encrypted payout/bank details (stored encrypted at rest; not exposed to members).
+  payoutDetailsEnc String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  members       OperatorMember[]
+  verifications VerificationDocument[]
+  listings      Listing[]
+  payouts       OperatorPayout[]
+
+  @@index([approvalStatus])
+}
+
+model OperatorMember {
+  id         String   @id @default(uuid())
+  operatorId String
+  operator   OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @default(OPERATOR_MEMBER)
+  createdAt  DateTime @default(now())
+
+  // A user may hold only one membership per operator (Section 12.7 unique operator membership).
+  @@unique([operatorId, userId])
+}
+
+model VerificationDocument {
+  id         String             @id @default(uuid())
+  operatorId String
+  operator   OperatorProfile    @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  kind       String
+  storageKey String
+  status     VerificationStatus @default(PENDING)
+  reviewedBy String?
+  reviewNote String?
+  createdAt  DateTime           @default(now())
+
+  @@index([operatorId])
+}
+
+// ------------------------- Catalog -------------------------
+
+model Location {
+  id       String  @id @default(uuid())
+  state    String
+  district String
+  zone     String?
+  parentId String?
+  parent   Location?  @relation("LocationTree", fields: [parentId], references: [id])
+  children Location[] @relation("LocationTree")
+  jetties  Jetty[]
+
+  @@index([state, district])
+}
+
+model Jetty {
+  id         String    @id @default(uuid())
+  name       String
+  locationId String
+  location   Location  @relation(fields: [locationId], references: [id])
+  latitude   Float?
+  longitude  Float?
+  listings   Listing[]
+}
+
+model Boat {
+  id         String   @id @default(uuid())
+  operatorId String
+  name       String
+  capacity   Int
+  createdAt  DateTime @default(now())
+  listings   Listing[]
+
+  @@index([operatorId])
+}
+
+model Amenity {
+  id   String @id @default(uuid())
+  name String @unique
+  listingAmenities ListingAmenity[]
+}
+
+model Listing {
+  id                 String        @id @default(uuid())
+  operatorId         String
+  operator           OperatorProfile @relation(fields: [operatorId], references: [id])
+  title              String
+  description        String
+  tripType           String
+  jettyId            String?
+  jetty              Jetty?        @relation(fields: [jettyId], references: [id])
+  boatId             String?
+  boat               Boat?         @relation(fields: [boatId], references: [id])
+  targetArea         String?
+  durationMinutes    Int?
+  maxCapacity        Int
+  bookingModel       BookingModel  @default(REQUEST_TO_BOOK)
+  paymentMode        PaymentMode   @default(FULL)
+  depositBasisPoints Int?
+  cancellationPolicyId String?
+  cancellationPolicy CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id])
+  safetyRequirements String?
+  status             ListingStatus @default(DRAFT)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  images    ListingImage[]
+  packages  Package[]
+  amenities ListingAmenity[]
+  schedules AvailabilitySchedule[]
+  blockedDates BlockedDate[]
+  bookings  Booking[]
+  reviews   Review[]
+
+  @@index([status])
+  @@index([operatorId])
+}
+
+model ListingImage {
+  id         String  @id @default(uuid())
+  listingId  String
+  listing    Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  storageKey String
+  sortOrder  Int     @default(0)
+}
+
+model ListingAmenity {
+  listingId String
+  amenityId String
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  amenity   Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, amenityId])
+}
+
+model Package {
+  id            String  @id @default(uuid())
+  listingId     String
+  listing       Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  name          String
+  priceSen      Int // whole-boat/package price in sen (>= 0 enforced in app + check)
+  capacity      Int
+  inclusions    String?
+  exclusions    String?
+  createdAt     DateTime @default(now())
+
+  bookings Booking[]
+
+  @@index([listingId])
+}
+
+// ------------------------- Availability -------------------------
+
+model AvailabilitySchedule {
+  id        String   @id @default(uuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  name      String?
+  createdAt DateTime @default(now())
+  slots     AvailabilitySlot[]
+}
+
+model AvailabilitySlot {
+  id         String   @id @default(uuid())
+  scheduleId String
+  schedule   AvailabilitySchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  startsAt   DateTime
+  endsAt     DateTime
+  capacity   Int
+  isExclusive Boolean @default(true)
+  soldOut    Boolean  @default(false)
+
+  holds    SlotHold[]
+  bookings Booking[]
+
+  @@index([scheduleId, startsAt])
+}
+
+model SlotHold {
+  id         String   @id @default(uuid())
+  slotId     String
+  slot       AvailabilitySlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  customerId String
+  expiresAt  DateTime
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  booking Booking?
+
+  // Enforces at most one ACTIVE hold per exclusive slot (double-booking prevention).
+  // A partial unique index on (slotId) WHERE active=true is added via migration SQL.
+  @@index([slotId, active])
+  @@index([expiresAt, active])
+}
+
+model BlockedDate {
+  id        String   @id @default(uuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  date      DateTime
+  reason    String?
+
+  @@unique([listingId, date])
+}
+
+// ------------------------- Booking -------------------------
+
+model Booking {
+  id             String        @id @default(uuid())
+  reference      String        @unique @default(cuid())
+  customerId     String
+  customer       User          @relation(fields: [customerId], references: [id])
+  listingId      String
+  listing        Listing       @relation(fields: [listingId], references: [id])
+  packageId      String
+  package        Package       @relation(fields: [packageId], references: [id])
+  slotId         String
+  slot           AvailabilitySlot @relation(fields: [slotId], references: [id])
+  slotHoldId     String?       @unique
+  slotHold       SlotHold?     @relation(fields: [slotHoldId], references: [id])
+  status         BookingStatus @default(DRAFT)
+  participantCount Int
+  totalSen       Int
+  amountDueNowSen Int
+  currency       String        @default("MYR")
+  organiserNotes String?
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  participants   BookingParticipant[]
+  statusHistory  BookingStatusHistory[]
+  payments       Payment[]
+  cancellation   CancellationRequest?
+  refunds        Refund[]
+  review         Review?
+  payoutItems    PayoutItem[]
+
+  @@index([customerId])
+  @@index([listingId])
+  @@index([status])
+}
+
+model BookingParticipant {
+  id        String  @id @default(uuid())
+  bookingId String
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String?
+  isEmergencyContact Boolean @default(false)
+}
+
+model BookingStatusHistory {
+  id        String        @id @default(uuid())
+  bookingId String
+  booking   Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fromStatus BookingStatus?
+  toStatus  BookingStatus
+  event     String
+  actorId   String?
+  reason    String?
+  correlationId String?
+  createdAt DateTime      @default(now())
+
+  @@index([bookingId])
+}
+
+// ------------------------- Cancellation / Refund policy -------------------------
+
+model CancellationPolicy {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  // Tiers stored as JSON: [{ minHoursBefore, refundBasisPoints }]
+  tiers     Json
+  isTemplate Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  listings Listing[]
+  refundRules RefundRule[]
+}
+
+model RefundRule {
+  id        String   @id @default(uuid())
+  policyId  String
+  policy    CancellationPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  minHoursBefore Int
+  refundBasisPoints Int
+}
+
+model CancellationRequest {
+  id         String       @id @default(uuid())
+  bookingId  String       @unique
+  booking    Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  reason     CancelReason
+  requestedBy String
+  hoursBeforeTrip Int
+  computedRefundSen Int
+  adminApproved Boolean   @default(false)
+  createdAt  DateTime     @default(now())
+}
+
+// ------------------------- Finance -------------------------
+
+model Payment {
+  id                String        @id @default(uuid())
+  bookingId         String
+  booking           Booking       @relation(fields: [bookingId], references: [id])
+  customerId        String
+  amountSen         Int
+  currency          String        @default("MYR")
+  provider          String
+  providerTxnId     String?
+  method            PaymentMethod
+  status            PaymentStatus @default(INITIATED)
+  idempotencyKey    String?
+  initiatedAt       DateTime      @default(now())
+  confirmedAt       DateTime?
+  failureReason     String?
+
+  events  PaymentEvent[]
+  refunds Refund[]
+
+  // Provider transaction IDs must be globally unique (Section 12.7).
+  @@unique([provider, providerTxnId])
+  @@index([bookingId])
+  @@index([status])
+}
+
+model PaymentEvent {
+  id        String   @id @default(uuid())
+  paymentId String
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  type      String
+  payload   Json
+  // Idempotency: a provider event id is recorded once.
+  providerEventId String? @unique
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
+}
+
+model Refund {
+  id         String       @id @default(uuid())
+  bookingId  String
+  booking    Booking      @relation(fields: [bookingId], references: [id])
+  paymentId  String?
+  payment    Payment?     @relation(fields: [paymentId], references: [id])
+  amountSen  Int
+  reason     CancelReason
+  status     RefundStatus @default(PENDING)
+  auditNote  String?
+  createdAt  DateTime     @default(now())
+  completedAt DateTime?
+
+  @@index([bookingId])
+}
+
+model PlatformFee {
+  id                   String   @id @default(uuid())
+  commissionBasisPoints Int
+  customerFeeSen       Int      @default(0)
+  effectiveFrom        DateTime @default(now())
+  createdBy            String?
+  createdAt            DateTime @default(now())
+}
+
+model Commission {
+  id             String   @id @default(uuid())
+  bookingId      String   @unique
+  grossSen       Int
+  refundSen      Int      @default(0)
+  commissionSen  Int
+  netToOperatorSen Int
+  createdAt      DateTime @default(now())
+}
+
+model OperatorPayout {
+  id          String       @id @default(uuid())
+  operatorId  String
+  operator    OperatorProfile @relation(fields: [operatorId], references: [id])
+  status      PayoutStatus @default(PENDING)
+  totalNetSen Int
+  reference   String?
+  paidAt      DateTime?
+  createdAt   DateTime     @default(now())
+
+  items PayoutItem[]
+
+  @@index([operatorId])
+}
+
+model PayoutItem {
+  id         String   @id @default(uuid())
+  payoutId   String
+  payout     OperatorPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  bookingId  String
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  netSen     Int
+
+  @@unique([payoutId, bookingId])
+}
+
+// ------------------------- Trust & Ops -------------------------
+
+model Review {
+  id        String   @id @default(uuid())
+  bookingId String   @unique // one completed review per booking (Section 12.7)
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id])
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([listingId])
+}
+
+model SupportCase {
+  id        String   @id @default(uuid())
+  subject   String
+  body      String
+  raisedBy  String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  channel   String
+  payload   Json
+  readAt    DateTime?
+  sentAt    DateTime?
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id])
+  action       String
+  targetType   String
+  targetId     String
+  oldValue     Json?
+  newValue     Json?
+  reason       String?
+  correlationId String?
+  createdAt    DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+// ------------------------- Platform -------------------------
+
+model IdempotencyKey {
+  id           String   @id @default(uuid())
+  scope        String
+  key          String
+  requestHash  String
+  responseBody Json?
+  statusCode   Int?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([scope, key])
+  @@index([expiresAt])
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  type        String
+  payload     Json
+  attempts    Int       @default(0)
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([processedAt])
+}
+
+model Job {
+  id          String    @id @default(uuid())
+  type        String
+  payload     Json
+  runAt       DateTime  @default(now())
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  lockedAt    DateTime?
+  completedAt DateTime?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([runAt, completedAt])
+}
